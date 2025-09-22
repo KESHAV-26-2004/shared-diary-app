@@ -191,7 +191,7 @@ const GroupSelectionPage = ({ onCreateGroup, onOpenGroup, userRole }: GroupSelec
   };
 
   return (
-    <div className="min-h-screen bg-gradient-warm flex flex-col items-center justify-center p-4 relative">
+    <div className="min-h-screen bg-gradient-warm flex flex-col items-center justify-center p-4 pb-24 relative">
       <div className="w-full max-w-2xl">
 
         {/* Title */}
@@ -199,6 +199,17 @@ const GroupSelectionPage = ({ onCreateGroup, onOpenGroup, userRole }: GroupSelec
           <h1 className="text-3xl font-bold text-foreground font-diary mb-2">Welcome to Shared Diary! 💌</h1>
           <p className="text-muted-foreground">Choose how you'd like to get started</p>
         </div>
+
+        {/* Existing groups buttons moved here */}
+        {userGroups.length > 0 && (
+          <div className="flex justify-center flex-wrap gap-2 mb-6">
+            {userGroups.map((grp) => (
+              <Button key={grp.groupId} onClick={() => handleSelectGroup(grp.groupId)} size="sm">
+                {grp.name}
+              </Button>
+            ))}
+          </div>
+        )}
 
         {/* Create/Join Group Cards */}
         <div className="grid gap-6 md:grid-cols-2">
@@ -265,28 +276,20 @@ const GroupSelectionPage = ({ onCreateGroup, onOpenGroup, userRole }: GroupSelec
           <Card className="bg-white/10 border-white/20 shadow-soft">
             <CardContent className="pt-6 text-center">
               <p className="text-sm text-muted-foreground">
-                <span className="font-medium">Your Role:</span> <span className="capitalize ml-1 text-foreground">{userRole}</span>
-                {userRole === "admin" && " - You can create and manage groups"}
-                {userRole === "member" && " - You can join groups and share entries"}
+                <span className="font-medium">Your Role:</span>{" "}
+                <span className="capitalize ml-1 text-foreground"></span> – You can create or join groups and share diary entries
               </p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Bottom bar: existing groups */}
-        {userGroups.length > 0 && (
-          <div className="absolute bottom-12 left-1/2 transform -translate-x-1/2 flex space-x-2">
-            {userGroups.map((grp) => (
-              <Button key={grp.groupId} onClick={() => handleSelectGroup(grp.groupId)} size="sm">
-                {grp.name} {/* show friendly name */}
-              </Button>
-            ))}
-          </div>
-        )}
-
-        {/* Logout button at bottom-right */}
+        {/* Logout button remains at bottom */}
         <div className="absolute bottom-4 right-4">
-          <Button variant="destructive" onClick={handleLogout} className="flex items-center space-x-2">
+          <Button
+            variant="destructive"
+            onClick={handleLogout}
+            className="flex items-center space-x-2"
+          >
             <LogOut className="h-4 w-4" /> <span>Logout</span>
           </Button>
         </div>

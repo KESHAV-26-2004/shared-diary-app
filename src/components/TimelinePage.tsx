@@ -78,18 +78,13 @@ const TimelinePage = ({ groupId }: TimelinePageProps) => {
           </p>
         </div>
 
-        <div className="space-y-8">
+        <div className="space-y-8 max-h-[80vh] overflow-y-auto px-2">
           {Object.entries(groupedEntries)
-            .sort(
-              ([a], [b]) => new Date(b).getTime() - new Date(a).getTime()
-            )
+            .sort(([a], [b]) => new Date(b).getTime() - new Date(a).getTime())
             .map(([date, dayEntries]) => (
               <div key={date} className="space-y-4">
-                <div className="flex items-center space-x-2 sticky top-4 z-10">
-                  <Badge
-                    variant="secondary"
-                    className="bg-accent/20 text-accent-foreground border-accent/30 px-3 py-1"
-                  >
+                <div className="flex items-center space-x-2 sticky top-0 z-10 bg-gradient-warm">
+                  <Badge variant="secondary" className="bg-accent/20 text-accent-foreground border-accent/30 px-3 py-1">
                     <CalendarDays className="h-3 w-3 mr-1" />
                     {formatDate(date)}
                   </Badge>
@@ -97,33 +92,18 @@ const TimelinePage = ({ groupId }: TimelinePageProps) => {
 
                 <div className="space-y-3">
                   {dayEntries.map((entry) => (
-                    <Card
-                      key={entry.id}
-                      className={`
-                        ${entry.userColor === "pink" ? "bg-diary-pink/60" : "bg-diary-blue/60"}
-                        border-white/40 shadow-card hover:shadow-soft transition-smooth
-                        backdrop-blur-sm
-                      `}
-                    >
+                    <Card key={entry.id} className={`${entry.userColor === "pink" ? "bg-diary-pink/60" : "bg-diary-blue/60"} border-white/40 shadow-card hover:shadow-soft transition-smooth backdrop-blur-sm`}>
                       <CardContent className="p-4">
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center space-x-2">
                             <Sparkles className="h-4 w-4 text-primary" />
-                            <span className="font-medium text-foreground font-diary">
-                              {entry.user}
-                            </span>
+                            <span className="font-medium text-foreground font-diary">{entry.user}</span>
                             <span className="text-lg">{entry.mood}</span>
                           </div>
                         </div>
-
-                        <p className="text-foreground leading-relaxed">
-                          {entry.text}
-                        </p>
-
+                        <p className="text-foreground leading-relaxed">{entry.text}</p>
                         <div className="mt-3 text-right">
-                          <div className="text-xs text-muted-foreground opacity-40">
-                            Shared Diary 💌
-                          </div>
+                          <div className="text-xs text-muted-foreground opacity-40">Shared Diary 💌</div>
                         </div>
                       </CardContent>
                     </Card>

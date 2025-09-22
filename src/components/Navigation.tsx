@@ -37,20 +37,23 @@ const Navigation = ({ currentPage, onNavigate, groupId, userRole }: NavigationPr
         <div className="flex items-center justify-between flex-1">
           <div className="flex items-center space-x-2">
             <Heart className="h-6 w-6 text-primary fill-current" />
-            <h1 className="text-xl font-semibold text-foreground font-diary">
+            {/* Hide title on small screens */}
+            <h1 className="text-xl font-semibold text-foreground font-diary hidden sm:block">
               Shared Diary 💌
             </h1>
           </div>
           
           {groupId && (
             <div className="flex items-center space-x-2">
-              <Badge 
-                variant="secondary" 
-                className="bg-accent/20 text-accent-foreground border-accent/30 cursor-pointer hover:bg-accent/30 transition-smooth"
+              <Badge
+                variant="secondary"
+                className="bg-accent/20 text-accent-foreground border-accent/30 cursor-pointer hover:bg-accent/30 transition-smooth text-xs sm:text-sm"
                 onClick={handleCopyGroupId}
               >
                 <Copy className="h-3 w-3 mr-1" />
-                Group: {groupId}
+                {/* On phones → only show ID; on sm+ → show "Group: ID" */}
+                <span className="sm:hidden">{groupId}</span>
+                <span className="hidden sm:inline">Group: {groupId}</span>
               </Badge>
             </div>
           )}
