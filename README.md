@@ -1,73 +1,87 @@
-# Welcome to your Lovable project
+# 💌 Shared Diary Web App
 
-## Project info
+A **private web-based diary** for sharing thoughts and memories with close friends. Built for simplicity, usability, and a warm, personal experience.
 
-**URL**: https://lovable.dev/projects/7f1356ae-3ce2-44a1-a0e7-722b7911d5be
+---
 
-## How can I edit this code?
+## 🌐 Features
 
-There are several ways of editing your application.
+### 🔑 Login & Approval Flow
 
-**Use Lovable**
+* Users log in with **email and password**.
+* Each login requires **admin approval** before access.
+* Approved users can view and add diary entries.
+* Managed using **Firebase Auth** and **Firestore**.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/7f1356ae-3ce2-44a1-a0e7-722b7911d5be) and start prompting.
+### ✍️ Diary Entries
 
-Changes made via Lovable will be committed automatically to this repo.
+* Users type raw text which is polished using the **OpenAI API**.
+* Entries are stored in Firestore with the following structure:
 
-**Use your preferred IDE**
+```json
+DiaryEntries: {
+  "2025-09-21": {
+    "Keshav": "Today felt quiet, I studied and rested peacefully.",
+  }
+}
+```
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+* Each entry is tagged with **date + user**.
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### 📅 Viewing Diary
 
-Follow these steps:
+* Timeline / Calendar interface displays all diary entries.
+* Entries show the **user name** and polished text.
+* Admins can view all users’ entries and approve new members.
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
+### 🛠 Admin Dashboard
+
+* Approve/reject new users.
+
+### 🌟 Extra Features
+
+* Search and filter diary entries by user or date.
+* Mood-based emoji tagging.
+
+---
+
+## 🔧 Tech Stack
+
+* **Frontend:** React.js + Tailwind CSS
+* **Backend / DB:** Firebase Auth + Firestore
+* **AI:** OpenAI API for diary entry polishing
+* **Hosting:** Firebase Hosting
+
+---
+
+## 🚀 Getting Started
+
+### 1️⃣ Clone & Install Dependencies
+
+```bash
 git clone <YOUR_GIT_URL>
+cd shared-diary-app
+npm install
+```
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+### 2️⃣ Run Locally
 
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+* App will run at `http://localhost:5173` by default.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### 3️⃣ Firebase Setup
 
-**Use GitHub Codespaces**
+1. Create a Firebase project.
+2. Enable **Authentication (Email/Password)**.
+3. Set up Firestore collections: `users` and `DiaryEntries`.
+4. Update `src/firebase.ts` with your Firebase config.
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### 4️⃣ OpenAI Integration
 
-## What technologies are used for this project?
+* Obtain an **OpenAI API key**.
+* Store it securely and call the API to polish diary entries.
 
-This project is built with:
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/7f1356ae-3ce2-44a1-a0e7-722b7911d5be) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
