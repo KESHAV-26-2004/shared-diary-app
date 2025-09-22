@@ -94,6 +94,13 @@ const ViewDiaryPage = ({ groupId }: ViewDiaryPageProps) => {
     });
   };
 
+  const formatDisplayDate = (isoDate: string) => {
+    if (!isoDate) return "";
+    const [year, month, day] = isoDate.split("-");
+    return `${day}-${month}-${year}`;
+  };
+
+
   return (
     <div className="min-h-screen bg-gradient-warm">
       <div className="max-w-4xl mx-auto px-4 py-8">
@@ -164,7 +171,7 @@ const ViewDiaryPage = ({ groupId }: ViewDiaryPageProps) => {
                     className="bg-accent/20 text-accent-foreground border-accent/30 px-3 py-1"
                   >
                     <CalendarDays className="h-3 w-3 mr-1" />
-                    {formatDate(date)}
+                    {formatDisplayDate(date)} 
                   </Badge>
                 </div>
 

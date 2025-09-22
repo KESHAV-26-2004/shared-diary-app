@@ -117,3 +117,13 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+@layer base {
+  html, body {
+    @apply min-h-screen;
+    font-size: 16px; /* ensures consistent scaling */
+    line-height: 1.5;
+  }
+}
+
+
+
