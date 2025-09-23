@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 
 // Firebase
 import { db } from "@/firebase";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { arrayUnion, doc, getDoc, updateDoc } from "firebase/firestore";
 
 interface Member {
   uid: string;
@@ -60,7 +60,7 @@ const PendingRequestsPage = ({ groupId, currentUserUid, currentUserRole }: Pendi
         m.uid === uid ? { ...m, approved: true } : m
       );
 
-      await updateDoc(groupRef, { members: updatedMembers });
+      await updateDoc(groupRef, { members: updatedMembers, memberUIDs: arrayUnion(uid) });
 
       toast({
         title: "Member approved! ✅",

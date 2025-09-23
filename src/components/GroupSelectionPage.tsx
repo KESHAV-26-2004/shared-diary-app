@@ -107,6 +107,7 @@ const GroupSelectionPage = ({ onCreateGroup, onOpenGroup, userRole }: GroupSelec
         members: [
           { uid, name: displayName, email: userDoc.data()?.email || "unknown@example.com", role: "admin", approved: true, joinedAt: new Date() },
         ],
+        memberUIDs: [uid],
       });
 
       // Update user's groupIds
