@@ -9,6 +9,14 @@ import { useToast } from "@/hooks/use-toast";
 import { db } from "@/firebase";
 import { arrayUnion, doc, getDoc, updateDoc } from "firebase/firestore";
 
+interface JoinRequest {
+  uid: string;
+  name: string;
+  email?: string;
+  requestedAt: any;
+  role?: "member" | "admin"; // default to member
+}
+
 interface Member {
   uid: string;
   name: string;
@@ -26,9 +34,9 @@ interface PendingRequestsPageProps {
 
 const PendingRequestsPage = ({ groupId, currentUserUid, currentUserRole }: PendingRequestsPageProps) => {
   const { toast } = useToast();
-  const [requests, setRequests] = useState<Member[]>([]);
+  const [requests, setRequests] = useState<JoinRequest[]>([]);
 
-  // Fetch unapproved members
+  // Fetch pending join requests
   useEffect(() => {
     if (!groupId) return;
 
@@ -38,36 +46,63 @@ const PendingRequestsPage = ({ groupId, currentUserUid, currentUserRole }: Pendi
         const groupSnap = await getDoc(groupRef);
         if (!groupSnap.exists()) return;
 
-        const members: Member[] = groupSnap.data()?.members || [];
-        const pendingMembers = members.filter((m) => !m.approved);
-        setRequests(pendingMembers);
+        const joinRequests: JoinRequest[] = groupSnap.data()?.joinRequests || [];
+        setRequests(joinRequests);
       } catch (err) {
-        console.error("Error fetching pending members:", err);
+        console.error("Error fetching pending requests:", err);
       }
     };
 
     fetchPending();
   }, [groupId]);
 
+  // Approve a join request
   const handleApprove = async (uid: string, name: string) => {
     try {
       const groupRef = doc(db, "groups", groupId);
       const groupSnap = await getDoc(groupRef);
       if (!groupSnap.exists()) return;
 
-      const members: Member[] = groupSnap.data()?.members || [];
-      const updatedMembers = members.map((m) =>
-        m.uid === uid ? { ...m, approved: true } : m
-      );
+      const data = groupSnap.data();
+      const joinRequests: JoinRequest[] = data?.joinRequests || [];
+      const members: Member[] = data?.members || [];
 
-      await updateDoc(groupRef, { members: updatedMembers, memberUIDs: arrayUnion(uid) });
+      const approvedRequest = joinRequests.find(r => r.uid === uid);
+      if (!approvedRequest) return;
+
+      const updatedMembers = [
+        ...members,
+        {
+          uid: approvedRequest.uid,
+          name: approvedRequest.name,
+          email: approvedRequest.email,
+          role: "member",
+          approved: true,
+          joinedAt: new Date()
+        }
+      ];
+
+      const updatedJoinRequests = joinRequests.filter(r => r.uid !== uid);
+
+      // Update group document
+      await updateDoc(groupRef, {
+        members: updatedMembers,
+        memberUIDs: arrayUnion(uid),
+        joinRequests: updatedJoinRequests
+      });
+
+      // <-- NEW: update the approved user's groupIds
+      const userRef = doc(db, "user", uid);
+      await updateDoc(userRef, {
+        groupIds: arrayUnion(groupId)
+      });
 
       toast({
         title: "Member approved! ✅",
         description: `${name} has been added to your diary group.`,
       });
 
-      setRequests(updatedMembers.filter((m) => !m.approved));
+      setRequests(updatedJoinRequests);
     } catch (err) {
       console.error(err);
       toast({
@@ -78,16 +113,20 @@ const PendingRequestsPage = ({ groupId, currentUserUid, currentUserRole }: Pendi
     }
   };
 
+
+  // Reject a join request
   const handleReject = async (uid: string, name: string) => {
     try {
       const groupRef = doc(db, "groups", groupId);
       const groupSnap = await getDoc(groupRef);
       if (!groupSnap.exists()) return;
 
-      const members: Member[] = groupSnap.data()?.members || [];
-      const updatedMembers = members.filter((m) => m.uid !== uid);
+      const joinRequests: JoinRequest[] = groupSnap.data()?.joinRequests || [];
+      const updatedJoinRequests = joinRequests.filter(r => r.uid !== uid);
 
-      await updateDoc(groupRef, { members: updatedMembers });
+      await updateDoc(groupRef, {
+        joinRequests: updatedJoinRequests
+      });
 
       toast({
         title: "Request rejected",
@@ -95,7 +134,7 @@ const PendingRequestsPage = ({ groupId, currentUserUid, currentUserRole }: Pendi
         variant: "destructive",
       });
 
-      setRequests(updatedMembers.filter((m) => !m.approved));
+      setRequests(updatedJoinRequests);
     } catch (err) {
       console.error(err);
       toast({
@@ -153,7 +192,7 @@ const PendingRequestsPage = ({ groupId, currentUserUid, currentUserRole }: Pendi
                         </div>
                       </div>
                       <Badge variant="outline" className="border-accent/40 text-accent">
-                        {request.role}
+                        {request.role || "member"}
                       </Badge>
                     </div>
                   </CardHeader>
@@ -161,7 +200,7 @@ const PendingRequestsPage = ({ groupId, currentUserUid, currentUserRole }: Pendi
                   <CardContent>
                     <div className="flex items-center justify-between">
                       <div className="text-sm text-muted-foreground">
-                        Requested on {request.joinedAt.toDate().toLocaleDateString()}
+                        Requested on {request.requestedAt.toDate().toLocaleDateString()}
                       </div>
                       
                       <div className="flex space-x-2">

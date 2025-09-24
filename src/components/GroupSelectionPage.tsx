@@ -128,46 +128,43 @@ const GroupSelectionPage = ({ onCreateGroup, onOpenGroup, userRole }: GroupSelec
   // Join Existing Group
   // --------------------------
   const handleJoinGroup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      if (!joinGroupId.trim()) return;
-      if (!uid) throw new Error("Not logged in");
+  e.preventDefault();
+  try {
+    if (!joinGroupId.trim()) return;
+    if (!uid) throw new Error("Not logged in");
 
-      const userDoc = await getDoc(doc(db, "user", uid));
-      const displayName = userDoc.exists() ? userDoc.data()?.name || "Anonymous" : "Anonymous";
+    const userDoc = await getDoc(doc(db, "user", uid));
+    const displayName = userDoc.exists() ? userDoc.data()?.name || "Anonymous" : "Anonymous";
 
-      const groupRef = doc(db, "groups", joinGroupId);
-      const groupSnap = await getDoc(groupRef);
+    const groupRef = doc(db, "groups", joinGroupId);
+    const groupSnap = await getDoc(groupRef);
 
-      if (!groupSnap.exists()) {
-        toast({ title: "Group not found", description: "Please check the Group ID.", variant: "destructive" });
-        return;
-      }
-
-      const members = groupSnap.data()?.members || [];
-      const existingMember = members.find((m: any) => m.uid === uid);
-
-      if (!existingMember) {
-        await updateDoc(groupRef, {
-          members: arrayUnion({ uid, name: displayName, email: userDoc.data()?.email || "unknown@example.com", role: "member", approved: false, joinedAt: new Date() }),
-        });
-      }
-
-      const userRef = doc(db, "user", uid);
-      await updateDoc(userRef, { groupIds: arrayUnion(joinGroupId) });
-
-      setUserGroups(prev => [{ 
-        groupId: joinGroupId, 
-        adminId: groupSnap.data()?.adminId,
-        name: groupSnap.data()?.name || joinGroupId, // friendly name
-      }, ...prev].slice(0, 5));
-
-      checkMemberApproval(joinGroupId, uid);
-      toast({ title: "Join request sent! 📨", description: "Waiting for admin approval." });
-    } catch (err: any) {
-      toast({ title: "Error joining group ❌", description: err.message, variant: "destructive" });
+    if (!groupSnap.exists()) {
+      toast({ title: "Group not found", description: "Please check the Group ID.", variant: "destructive" });
+      return;
     }
-  };
+
+    const joinRequests = groupSnap.data()?.joinRequests || [];
+    const existingRequest = joinRequests.find((r: any) => r.uid === uid);
+
+    if (!existingRequest) {
+      await updateDoc(groupRef, {
+        joinRequests: arrayUnion({
+          uid,
+          name: displayName,
+          email: userDoc.data()?.email || "unknown@example.com",
+          requestedAt: new Date()
+        })
+      });
+    }
+
+    toast({ title: "Join request sent! 📨", description: "Waiting for admin approval." });
+
+  } catch (err: any) {
+    toast({ title: "Error joining group ❌", description: err.message, variant: "destructive" });
+  }
+};
+
 
   // --------------------------
   // Check approval and open group

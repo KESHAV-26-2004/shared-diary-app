@@ -36,13 +36,15 @@ const Navigation = ({ currentPage, onNavigate, groupId, userRole }: NavigationPr
       <div className="max-w-6xl mx-auto flex items-center justify-between">
         <div className="flex items-center justify-between flex-1">
           <div className="flex items-center space-x-2">
-            <Heart className="h-6 w-6 text-primary fill-current" />
-            {/* Hide title on small screens */}
-            <h1 className="text-xl font-semibold text-foreground font-diary hidden sm:block">
-              Shared Diary 💌
-            </h1>
+            {/* Hide both icon and title on small screens */}
+            <div className="hidden sm:flex items-center space-x-2">
+              <Heart className="h-6 w-6 text-primary fill-current" />
+              <h1 className="text-xl font-semibold text-foreground font-diary">
+                Shared Diary 💌
+              </h1>
+            </div>
           </div>
-          
+
           {groupId && (
             <div className="flex items-center space-x-2">
               <Badge
