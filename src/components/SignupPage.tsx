@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { User, Mail, Lock, ArrowLeft, Heart } from "lucide-react";
 import diaryBackground from "@/assets/diary-background.jpg";
 
-import { createUserWithEmailAndPassword } from "firebase/auth";
+import { createUserWithEmailAndPassword,sendEmailVerification } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 import { auth, db } from "@/firebase";
 
@@ -37,6 +37,10 @@ const SignupPage = ({ onSignup, onBackToLogin }: SignupPageProps) => {
         createdAt: new Date(),
         groupIds: [], // initialize empty array
       });
+
+      await sendEmailVerification(userCredential.user);
+      await auth.signOut();
+      onBackToLogin();
 
       // Call parent handler
       onSignup(name, email, password);

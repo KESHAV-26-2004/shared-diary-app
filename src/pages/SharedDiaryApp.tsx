@@ -66,29 +66,42 @@ const SharedDiaryApp = () => {
   // Auth State Listener
   // --------------------------
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        const userDoc = await getDoc(doc(db, "user", user.uid));
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          setCurrentUser({
-            id: user.uid,
-            name: userData.name,
-            email: userData.email,
-            role: userData.role || "member",
-            groupIds: userData.groupIds || []
-          });
-          setAppState("groupSelection");
-        }
-      } else {
+  const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      // 🚫 Check email verification first
+      if (!user.emailVerified) {
+        console.warn("Unverified user detected. Signing out...");
+        await auth.signOut();
+        alert("Please verify your email before logging in. Check your inbox or trash.");
         setCurrentUser(null);
         setAppState("login");
+        setLoadingAuth(false);
+        return;
       }
-      setLoadingAuth(false);
-    });
 
-    return () => unsubscribe();
-  }, []);
+      // ✅ Verified user — continue loading their Firestore profile
+      const userDoc = await getDoc(doc(db, "user", user.uid));
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        setCurrentUser({
+          id: user.uid,
+          name: userData.name,
+          email: userData.email,
+          role: userData.role || "member",
+          groupIds: userData.groupIds || [],
+        });
+        setAppState("groupSelection");
+      }
+    } else {
+      setCurrentUser(null);
+      setAppState("login");
+    }
+    setLoadingAuth(false);
+  });
+
+  return () => unsubscribe();
+}, []);
+
 
 
   // --------------------------

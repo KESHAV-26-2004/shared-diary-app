@@ -140,30 +140,72 @@ const GroupSelectionPage = ({ onCreateGroup, onOpenGroup, userRole }: GroupSelec
     const groupSnap = await getDoc(groupRef);
 
     if (!groupSnap.exists()) {
-      toast({ title: "Group not found", description: "Please check the Group ID.", variant: "destructive" });
+      toast({
+        title: "Group not found",
+        description: "Please check the Group ID.",
+        variant: "destructive",
+      });
       return;
     }
 
-    const joinRequests = groupSnap.data()?.joinRequests || [];
-    const existingRequest = joinRequests.find((r: any) => r.uid === uid);
+    const data = groupSnap.data();
+    const joinRequests = data?.joinRequests || [];
+    const members = data?.members || [];
 
-    if (!existingRequest) {
-      await updateDoc(groupRef, {
-        joinRequests: arrayUnion({
-          uid,
-          name: displayName,
-          email: userDoc.data()?.email || "unknown@example.com",
-          requestedAt: new Date()
-        })
+    // ✅ Already a member?
+    const isAlreadyMember = members.some((m: any) => m.uid === uid);
+    if (isAlreadyMember) {
+      toast({
+        title: "Already a member 💫",
+        description: "You're already part of this group!",
       });
+      return;
     }
 
-    toast({ title: "Join request sent! 📨", description: "Waiting for admin approval." });
+    // ✅ Already requested?
+    const existingRequest = joinRequests.find((r: any) => r.uid === uid);
+    if (existingRequest) {
+      toast({
+        title: "Request already sent ⏳",
+        description: "Please wait for admin approval.",
+      });
+      return;
+    }
 
-  } catch (err: any) {
-    toast({ title: "Error joining group ❌", description: err.message, variant: "destructive" });
-  }
-};
+    // ✅ Otherwise, send new join request
+    await updateDoc(groupRef, {
+      joinRequests: arrayUnion({
+        uid,
+        name: displayName,
+        email: userDoc.data()?.email || "unknown@example.com",
+        requestedAt: new Date(),
+      }),
+    });
+
+    toast({
+      title: "Join request sent! 📨",
+      description: "Waiting for admin approval.",
+    });
+
+    }catch (err: any) {
+      console.error("🔥 Error joining group:", err);
+
+      let errorMessage = "An unexpected error occurred.";
+      if (err.code === "permission-denied")
+        errorMessage = "Permission denied — Firestore rules blocked this action.";
+      else if (err.code === "not-found")
+        errorMessage = "The group or user document was not found.";
+      else if (err.message)
+        errorMessage = err.message;
+
+      toast({
+        title: "Error joining group ❌",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    }
+  };
+
 
 
   // --------------------------

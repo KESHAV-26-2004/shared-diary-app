@@ -58,61 +58,75 @@ const PendingRequestsPage = ({ groupId, currentUserUid, currentUserRole }: Pendi
 
   // Approve a join request
   const handleApprove = async (uid: string, name: string) => {
-    try {
-      const groupRef = doc(db, "groups", groupId);
-      const groupSnap = await getDoc(groupRef);
-      if (!groupSnap.exists()) return;
+  try {
+    const groupRef = doc(db, "groups", groupId);
+    const groupSnap = await getDoc(groupRef);
+    if (!groupSnap.exists()) throw new Error("Group not found");
 
-      const data = groupSnap.data();
-      const joinRequests: JoinRequest[] = data?.joinRequests || [];
-      const members: Member[] = data?.members || [];
+    const data = groupSnap.data();
+    const joinRequests: JoinRequest[] = data?.joinRequests || [];
+    const members: Member[] = data?.members || [];
 
-      const approvedRequest = joinRequests.find(r => r.uid === uid);
-      if (!approvedRequest) return;
+    const approvedRequest = joinRequests.find(r => r.uid === uid);
+    if (!approvedRequest) throw new Error("Join request not found");
 
-      const updatedMembers = [
-        ...members,
-        {
-          uid: approvedRequest.uid,
-          name: approvedRequest.name,
-          email: approvedRequest.email,
-          role: "member",
-          approved: true,
-          joinedAt: new Date()
-        }
-      ];
+    const updatedMembers = [
+      ...members,
+      {
+        uid: approvedRequest.uid,
+        name: approvedRequest.name,
+        email: approvedRequest.email,
+        role: "member",
+        approved: true,
+        joinedAt: new Date()
+      }
+    ];
 
-      const updatedJoinRequests = joinRequests.filter(r => r.uid !== uid);
+    const updatedJoinRequests = joinRequests.filter(r => r.uid !== uid);
 
-      // Update group document
-      await updateDoc(groupRef, {
-        members: updatedMembers,
-        memberUIDs: arrayUnion(uid),
-        joinRequests: updatedJoinRequests
-      });
+    // Update group document
+    await updateDoc(groupRef, {
+      members: updatedMembers,
+      memberUIDs: arrayUnion(uid),
+      joinRequests: updatedJoinRequests
+    });
 
-      // <-- NEW: update the approved user's groupIds
-      const userRef = doc(db, "user", uid);
-      await updateDoc(userRef, {
-        groupIds: arrayUnion(groupId)
-      });
+    // Update the approved user's document
+    const userRef = doc(db, "user", uid);
+    await updateDoc(userRef, {
+      groupIds: arrayUnion(groupId)
+    });
 
-      toast({
-        title: "Member approved! ✅",
-        description: `${name} has been added to your diary group.`,
-      });
+    toast({
+      title: "Member approved! ✅",
+      description: `${name} has been added to your diary group.`,
+    });
 
-      setRequests(updatedJoinRequests);
-    } catch (err) {
-      console.error(err);
-      toast({
-        title: "Error",
-        description: "Failed to approve member",
-        variant: "destructive",
-      });
+    setRequests(updatedJoinRequests);
+
+  } catch (err: any) {
+    console.error("🔥 Firestore error during approval:", err);
+
+    // Extract specific error message
+    let errorMessage = "An unknown error occurred.";
+
+    if (err.code === "permission-denied") {
+      errorMessage = "Permission denied — Firestore security rules blocked this action.";
+    } else if (err.code === "not-found") {
+      errorMessage = "The document you’re trying to update doesn’t exist.";
+    } else if (err.code === "unavailable") {
+      errorMessage = "Network error — please check your connection.";
+    } else if (err.message) {
+      errorMessage = err.message;
     }
-  };
 
+    toast({
+      title: "Error approving member ❌",
+      description: errorMessage,
+      variant: "destructive",
+    });
+  }
+};
 
   // Reject a join request
   const handleReject = async (uid: string, name: string) => {
