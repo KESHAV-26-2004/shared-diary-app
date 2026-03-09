@@ -1,3 +1,4 @@
+//src/components/GroupSelectionPage.tsx
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -5,13 +6,14 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, Users, Hash, LogOut } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { generateGroupKey} from "@/lib/crypto";
 
 // Firebase imports
 import { db, auth } from "@/firebase";
 import { doc, setDoc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
 
 interface GroupSelectionPageProps {
-  onCreateGroup: (groupId?: string) => void; // callback for creating new group
+  onCreateGroup: (groupId?: string) => Promise<void>; // callback for creating new group
   onOpenGroup: (groupId: string) => void;    // callback for opening existing group
   userRole: "admin" | "member";
 }
@@ -26,6 +28,7 @@ const GroupSelectionPage = ({ onCreateGroup, onOpenGroup, userRole }: GroupSelec
   const [joinGroupId, setJoinGroupId] = useState("");
   const [groupName, setGroupName] = useState(""); // new input for friendly name
   const [userGroups, setUserGroups] = useState<Group[]>([]);
+  const [loadingGroups, setLoadingGroups] = useState(true);
   const { toast } = useToast();
 
   const uid = auth.currentUser?.uid;
@@ -80,7 +83,9 @@ const GroupSelectionPage = ({ onCreateGroup, onOpenGroup, userRole }: GroupSelec
       }
     };
 
-    fetchGroups();
+    fetchGroups().finally(() => {
+      setLoadingGroups(false);
+    });
   }, [uid]);
 
   // --------------------------
@@ -99,10 +104,13 @@ const GroupSelectionPage = ({ onCreateGroup, onOpenGroup, userRole }: GroupSelec
 
       const groupId = `DG-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
+      const groupKey = generateGroupKey();
+
       // Create group in Firestore
       await setDoc(doc(db, "groups", groupId), {
         adminId: uid,
         name: groupName, // friendly name
+        groupKey: groupKey,
         createdAt: new Date(),
         members: [
           { uid, name: displayName, email: userDoc.data()?.email || "unknown@example.com", role: "admin", approved: true, joinedAt: new Date() },
@@ -149,7 +157,6 @@ const GroupSelectionPage = ({ onCreateGroup, onOpenGroup, userRole }: GroupSelec
     }
 
     const data = groupSnap.data();
-    const joinRequests = data?.joinRequests || [];
     const members = data?.members || [];
 
     // ✅ Already a member?
@@ -163,8 +170,10 @@ const GroupSelectionPage = ({ onCreateGroup, onOpenGroup, userRole }: GroupSelec
     }
 
     // ✅ Already requested?
-    const existingRequest = joinRequests.find((r: any) => r.uid === uid);
-    if (existingRequest) {
+    const requestRef = doc(db, "groups", joinGroupId, "joinRequests", uid);
+    const requestSnap = await getDoc(requestRef);
+
+    if (requestSnap.exists()) {
       toast({
         title: "Request already sent ⏳",
         description: "Please wait for admin approval.",
@@ -173,14 +182,15 @@ const GroupSelectionPage = ({ onCreateGroup, onOpenGroup, userRole }: GroupSelec
     }
 
     // ✅ Otherwise, send new join request
-    await updateDoc(groupRef, {
-      joinRequests: arrayUnion({
+    await setDoc(
+      doc(db, "groups", joinGroupId, "joinRequests", uid),
+      {
         uid,
         name: displayName,
         email: userDoc.data()?.email || "unknown@example.com",
         requestedAt: new Date(),
-      }),
-    });
+      }
+    );
 
     toast({
       title: "Join request sent! 📨",
@@ -229,6 +239,14 @@ const GroupSelectionPage = ({ onCreateGroup, onOpenGroup, userRole }: GroupSelec
   const handleSelectGroup = (groupId: string) => {
     checkMemberApproval(groupId, uid!);
   };
+
+  if (loadingGroups) {
+    return (
+      <div className="min-h-screen bg-gradient-warm flex items-center justify-center">
+        <p className="text-muted-foreground">Loading groups...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-warm flex flex-col items-center justify-center p-4 pb-24 relative">

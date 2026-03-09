@@ -1,3 +1,4 @@
+//src/components/PendingRequestsPage.tsx
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 
 // Firebase
 import { db } from "@/firebase";
-import { arrayUnion, doc, getDoc, updateDoc } from "firebase/firestore";
+import { arrayUnion, doc, getDoc, updateDoc, collection, getDocs, deleteDoc } from "firebase/firestore";
 
 interface JoinRequest {
   uid: string;
@@ -35,6 +36,7 @@ interface PendingRequestsPageProps {
 const PendingRequestsPage = ({ groupId, currentUserUid, currentUserRole }: PendingRequestsPageProps) => {
   const { toast } = useToast();
   const [requests, setRequests] = useState<JoinRequest[]>([]);
+  const [loading, setLoading] = useState(true);
 
   // Fetch pending join requests
   useEffect(() => {
@@ -42,12 +44,20 @@ const PendingRequestsPage = ({ groupId, currentUserUid, currentUserRole }: Pendi
 
     const fetchPending = async () => {
       try {
-        const groupRef = doc(db, "groups", groupId);
-        const groupSnap = await getDoc(groupRef);
-        if (!groupSnap.exists()) return;
+        setLoading(true);
 
-        const joinRequests: JoinRequest[] = groupSnap.data()?.joinRequests || [];
-        setRequests(joinRequests);
+        const snapshot = await getDocs(
+          collection(db, "groups", groupId, "joinRequests")
+        );
+
+        const requests = snapshot.docs.map(doc => ({
+          uid: doc.id,
+          ...doc.data()
+        })) as JoinRequest[];
+
+        setRequests(requests);
+        setLoading(false);
+
       } catch (err) {
         console.error("Error fetching pending requests:", err);
       }
@@ -58,89 +68,84 @@ const PendingRequestsPage = ({ groupId, currentUserUid, currentUserRole }: Pendi
 
   // Approve a join request
   const handleApprove = async (uid: string, name: string) => {
-  try {
-    const groupRef = doc(db, "groups", groupId);
-    const groupSnap = await getDoc(groupRef);
-    if (!groupSnap.exists()) throw new Error("Group not found");
+    try {
+      const groupRef = doc(db, "groups", groupId);
+      const groupSnap = await getDoc(groupRef);
 
-    const data = groupSnap.data();
-    const joinRequests: JoinRequest[] = data?.joinRequests || [];
-    const members: Member[] = data?.members || [];
+      if (!groupSnap.exists()) throw new Error("Group not found");
 
-    const approvedRequest = joinRequests.find(r => r.uid === uid);
-    if (!approvedRequest) throw new Error("Join request not found");
+      const data = groupSnap.data();
+      const members: Member[] = data?.members || [];
 
-    const updatedMembers = [
-      ...members,
-      {
-        uid: approvedRequest.uid,
-        name: approvedRequest.name,
-        email: approvedRequest.email,
-        role: "member",
-        approved: true,
-        joinedAt: new Date()
-      }
-    ];
+      const approvedRequest = requests.find(r => r.uid === uid);
+      if (!approvedRequest) throw new Error("Join request not found");
 
-    const updatedJoinRequests = joinRequests.filter(r => r.uid !== uid);
+      const updatedMembers = [
+        ...members,
+        {
+          uid: approvedRequest.uid,
+          name: approvedRequest.name,
+          email: approvedRequest.email,
+          role: "member",
+          approved: true,
+          joinedAt: new Date()
+        }
+      ];
 
-    // Update group document
-    await updateDoc(groupRef, {
-      members: updatedMembers,
-      memberUIDs: arrayUnion(uid),
-      joinRequests: updatedJoinRequests
-    });
+      // Update group document
+      await updateDoc(groupRef, {
+        members: updatedMembers,
+        memberUIDs: arrayUnion(uid)
+      });
 
-    // Update the approved user's document
-    const userRef = doc(db, "user", uid);
-    await updateDoc(userRef, {
-      groupIds: arrayUnion(groupId)
-    });
+      // Add groupId to user's document
+      const userRef = doc(db, "user", uid);
+      await updateDoc(userRef, {
+        groupIds: arrayUnion(groupId)
+      });
 
-    toast({
-      title: "Member approved! ✅",
-      description: `${name} has been added to your diary group.`,
-    });
+      // Delete join request document
+      await deleteDoc(
+        doc(db, "groups", groupId, "joinRequests", uid)
+      );
 
-    setRequests(updatedJoinRequests);
+      toast({
+        title: "Member approved! ✅",
+        description: `${name} has been added to your diary group.`,
+      });
 
-  } catch (err: any) {
-    console.error("🔥 Firestore error during approval:", err);
+      // Update UI
+      setRequests(prev => prev.filter(r => r.uid !== uid));
 
-    // Extract specific error message
-    let errorMessage = "An unknown error occurred.";
+    } catch (err: any) {
+      console.error("🔥 Firestore error during approval:", err);
 
-    if (err.code === "permission-denied") {
-      errorMessage = "Permission denied — Firestore security rules blocked this action.";
-    } else if (err.code === "not-found") {
-      errorMessage = "The document you’re trying to update doesn’t exist.";
-    } else if (err.code === "unavailable") {
-      errorMessage = "Network error — please check your connection.";
-    } else if (err.message) {
-      errorMessage = err.message;
+      let errorMessage = "An unknown error occurred.";
+
+      if (err.code === "permission-denied")
+        errorMessage = "Permission denied — Firestore rules blocked this action.";
+      else if (err.code === "not-found")
+        errorMessage = "The document you're trying to update doesn't exist.";
+      else if (err.code === "unavailable")
+        errorMessage = "Network error — please check your connection.";
+      else if (err.message)
+        errorMessage = err.message;
+
+      toast({
+        title: "Error approving member ❌",
+        description: errorMessage,
+        variant: "destructive",
+      });
     }
-
-    toast({
-      title: "Error approving member ❌",
-      description: errorMessage,
-      variant: "destructive",
-    });
-  }
-};
+  };
 
   // Reject a join request
   const handleReject = async (uid: string, name: string) => {
     try {
-      const groupRef = doc(db, "groups", groupId);
-      const groupSnap = await getDoc(groupRef);
-      if (!groupSnap.exists()) return;
 
-      const joinRequests: JoinRequest[] = groupSnap.data()?.joinRequests || [];
-      const updatedJoinRequests = joinRequests.filter(r => r.uid !== uid);
-
-      await updateDoc(groupRef, {
-        joinRequests: updatedJoinRequests
-      });
+      await deleteDoc(
+        doc(db, "groups", groupId, "joinRequests", uid)
+      );
 
       toast({
         title: "Request rejected",
@@ -148,9 +153,11 @@ const PendingRequestsPage = ({ groupId, currentUserUid, currentUserRole }: Pendi
         variant: "destructive",
       });
 
-      setRequests(updatedJoinRequests);
+      setRequests(prev => prev.filter(r => r.uid !== uid));
+
     } catch (err) {
       console.error(err);
+
       toast({
         title: "Error",
         description: "Failed to reject member",
@@ -163,6 +170,14 @@ const PendingRequestsPage = ({ groupId, currentUserUid, currentUserRole }: Pendi
     return (
       <div className="min-h-screen flex items-center justify-center">
         <p className="text-muted-foreground">Only admins can approve or reject members.</p>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-warm flex items-center justify-center">
+        <p className="text-muted-foreground">Loading requests...</p>
       </div>
     );
   }

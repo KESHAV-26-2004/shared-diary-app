@@ -1,9 +1,11 @@
+//src/components/ViewDiary.tsx
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CalendarDays, Sparkles } from "lucide-react";
 import { db } from "@/firebase";
 import { collection, onSnapshot } from "firebase/firestore";
+import { decryptEntry } from "@/lib/crypto";
 
 interface DiaryEntry {
   id: string;
@@ -16,12 +18,14 @@ interface DiaryEntry {
 
 interface ViewDiaryPageProps {
   groupId: string;
+  groupKey: string;
 }
 
 const moods = ["😊", "😢", "😡", "✨", "❤️", "😴"];
 
-const ViewDiaryPage = ({ groupId }: ViewDiaryPageProps) => {
+const ViewDiaryPage = ({ groupId, groupKey }: ViewDiaryPageProps) => {
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filteredEntries, setFilteredEntries] = useState<DiaryEntry[]>([]);
   const [filterUser, setFilterUser] = useState<string>("All");
   const [filterMood, setFilterMood] = useState<string>("All");
@@ -30,29 +34,36 @@ const ViewDiaryPage = ({ groupId }: ViewDiaryPageProps) => {
 
   // Fetch all entries once
   useEffect(() => {
-    if (!groupId) return;
+    if (!groupId || !groupKey) return;
 
     const unsubscribe = onSnapshot(
-      collection(db, "diaryEntries", groupId, "entries"),
-      (snapshot) => {
-        const fetchedEntries: DiaryEntry[] = snapshot.docs.map((doc) => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            user: data.user,
-            text: data.text,
-            mood: data.mood,
-            createdAt: data.createdAt?.toDate() || new Date(),
-            userColor: Math.random() > 0.5 ? "pink" : "blue",
-          };
-        });
+      collection(db, "groups", groupId, "entries"),
+      async (snapshot) => {
+
+        const fetchedEntries: DiaryEntry[] = await Promise.all(
+          snapshot.docs.map(async (doc) => {
+            const data = doc.data();
+
+            return {
+              id: doc.id,
+              user: data.user,
+              text: await decryptEntry(data.text, groupKey),
+              mood: data.mood,
+              createdAt: data.createdAt?.toDate() || new Date(),
+              userColor: Math.random() > 0.5 ? "pink" : "blue",
+            };
+          })
+        );
+
         setEntries(fetchedEntries);
+        setLoading(false);
       },
       (error) => console.error(error)
     );
 
     return () => unsubscribe();
-  }, [groupId]);
+
+  }, [groupId, groupKey]);
 
   // Apply filters and sorting
   useEffect(() => {
@@ -100,6 +111,13 @@ const ViewDiaryPage = ({ groupId }: ViewDiaryPageProps) => {
     return `${day}-${month}-${year}`;
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-warm flex items-center justify-center">
+        <p className="text-muted-foreground">Loading diary...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-warm">

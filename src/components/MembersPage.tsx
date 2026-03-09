@@ -1,3 +1,4 @@
+//src/components/MembersPage.tsx
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +36,7 @@ interface MembersPageProps {
 
 const MembersPage = ({ groupId }: MembersPageProps) => {
   const [members, setMembers] = useState<Member[]>([]);
+  const [loading, setLoading] = useState(true);
   const [adminId, setAdminId] = useState<string | null>(null);
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const { toast } = useToast();
@@ -44,6 +46,7 @@ const MembersPage = ({ groupId }: MembersPageProps) => {
   useEffect(() => {
     const fetchMembers = async () => {
       try {
+        setLoading(true);
         const groupSnap = await getDoc(doc(db, "groups", groupId));
         if (groupSnap.exists()) {
           const data = groupSnap.data();
@@ -60,6 +63,7 @@ const MembersPage = ({ groupId }: MembersPageProps) => {
               color: Math.random() > 0.5 ? "pink" : "blue",
             })) || [];
           setMembers(fetchedMembers);
+          setLoading(false);
         }
       } catch (err) {
         console.error("Error fetching members:", err);
@@ -72,53 +76,79 @@ const MembersPage = ({ groupId }: MembersPageProps) => {
   // 🔹 Handle member deletion
   const handleDeleteMember = async (uid: string, name: string) => {
     try {
-      if (!currentUid || currentUid !== adminId) {
-        toast({
-          title: "Permission denied",
-          description: "Only admin can remove members",
-          variant: "destructive",
-        });
-        return;
-      }
 
-      const groupRef = doc(db, "groups", groupId);
-      const groupSnap = await getDoc(groupRef);
-      if (!groupSnap.exists()) return;
-
-      const data = groupSnap.data();
-      const updatedMembers = (data.members || []).filter((m: any) => m.uid !== uid);
-      const updatedMemberUIDs = (data.memberUIDs || []).filter((id: string) => id !== uid);
-
-      await updateDoc(groupRef, {
-        members: updatedMembers,
-        memberUIDs: updatedMemberUIDs,
-      });
-
-      // Remove from user side
-      const userRef = doc(db, "user", uid);
-      await updateDoc(userRef, {
-        groupIds: arrayRemove(groupId),
-      });
-
-      setMembers((prev) => prev.filter((m) => m.uid !== uid));
+    if (!currentUid || currentUid !== adminId) {
       toast({
-        title: "Member removed 🗑️",
-        description: `${name} has been removed from the group.`,
-      });
-    } catch (err: any) {
-      console.error(err);
-      toast({
-        title: "Error removing member",
-        description: err.message,
+        title: "Permission denied",
+        description: "Only the admin can remove members",
         variant: "destructive",
       });
-    } finally {
-      setSelectedMember(null); // close dialog
+      return;
     }
-  };
+
+    if (uid === adminId) {
+      toast({
+        title: "Action blocked",
+        description: "Admin cannot remove themselves from the group",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const groupRef = doc(db, "groups", groupId);
+    const groupSnap = await getDoc(groupRef);
+
+    if (!groupSnap.exists()) return;
+
+    const data = groupSnap.data();
+
+    const updatedMembers = (data.members || []).filter((m:any) => m.uid !== uid);
+    const updatedUIDs = (data.memberUIDs || []).filter((id:string) => id !== uid);
+
+    await updateDoc(groupRef,{
+      members: updatedMembers,
+      memberUIDs: updatedUIDs
+    });
+
+    // remove group from user
+    const userRef = doc(db,"user",uid);
+
+    await updateDoc(userRef,{
+      groupIds: arrayRemove(groupId)
+    });
+
+    setMembers(prev => prev.filter(m => m.uid !== uid));
+
+    toast({
+      title: "Member removed",
+      description: `${name} was removed from the group.`,
+    });
+
+  } catch(err:any){
+
+    console.error(err);
+
+    toast({
+      title:"Error removing member",
+      description:err.message,
+      variant:"destructive"
+    });
+
+  } finally {
+    setSelectedMember(null);
+  }
+};
 
   const approvedMembers = members.filter((m) => m.approved);
   const pendingMembers = members.filter((m) => !m.approved);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-warm flex items-center justify-center">
+        <p className="text-muted-foreground">Loading members...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-warm">

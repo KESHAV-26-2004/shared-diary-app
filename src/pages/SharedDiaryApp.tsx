@@ -1,3 +1,4 @@
+//src/pages/SharedDiaryApp.tsx
 import { useState, useEffect } from "react";
 import Navigation from "@/components/Navigation";
 import LoginPage from "@/components/LoginPage";
@@ -55,6 +56,7 @@ const SharedDiaryApp = () => {
   const [appState, setAppState] = useState<"login" | "signup" | "groupSelection" | "inGroup">("login");
   const [loadingAuth, setLoadingAuth] = useState(true); // loading while checking auth
   const [groupId, setGroupId] = useState<string | null>(null);
+  const [groupKey, setGroupKey] = useState<string | null>(null);
   const [groupRole, setGroupRole] = useState<"admin" | "member">("member");
   const [memberStatus, setMemberStatus] = useState<"approved" | "pending">("pending");
 
@@ -62,46 +64,78 @@ const SharedDiaryApp = () => {
   const [members, setMembers] = useState<Member[]>([]);
   const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
 
+  const handleBackToGroups = () => {
+    setAppState("groupSelection");
+    setGroupId(null);
+    setGroupKey(null);
+    setCurrentPage("timeline");
+    localStorage.removeItem("lastGroupId");
+  };
+
   // --------------------------
   // Auth State Listener
   // --------------------------
   useEffect(() => {
-  const unsubscribe = onAuthStateChanged(auth, async (user) => {
-    if (user) {
-      // 🚫 Check email verification first
-      if (!user.emailVerified) {
-        console.warn("Unverified user detected. Signing out...");
-        await auth.signOut();
-        alert("Please verify your email before logging in. Check your inbox or trash.");
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        // 🚫 Check email verification first
+        if (!user.emailVerified) {
+          console.warn("Unverified user detected. Signing out...");
+          await auth.signOut();
+          alert("Please verify your email before logging in. Check your inbox or trash.");
+          setCurrentUser(null);
+          setAppState("login");
+          setLoadingAuth(false);
+          return;
+        }
+
+        // ✅ Verified user — continue loading their Firestore profile
+        const userDoc = await getDoc(doc(db, "user", user.uid));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          setCurrentUser({
+            id: user.uid,
+            name: userData.name,
+            email: userData.email,
+            role: userData.role || "member",
+            groupIds: userData.groupIds || [],
+          });
+          setAppState("groupSelection");
+        }
+      } else {
         setCurrentUser(null);
         setAppState("login");
-        setLoadingAuth(false);
-        return;
       }
+      setLoadingAuth(false);
+    });
 
-      // ✅ Verified user — continue loading their Firestore profile
-      const userDoc = await getDoc(doc(db, "user", user.uid));
-      if (userDoc.exists()) {
-        const userData = userDoc.data();
-        setCurrentUser({
-          id: user.uid,
-          name: userData.name,
-          email: userData.email,
-          role: userData.role || "member",
-          groupIds: userData.groupIds || [],
-        });
-        setAppState("groupSelection");
-      }
-    } else {
-      setCurrentUser(null);
-      setAppState("login");
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+
+    if (!currentUser) return;
+
+    const savedGroup = localStorage.getItem("lastGroupId");
+
+    if (savedGroup) {
+      setGroupId(savedGroup);
+      handleOpenGroup(savedGroup); // this already sets timeline
     }
-    setLoadingAuth(false);
-  });
 
-  return () => unsubscribe();
-}, []);
+  }, [currentUser]);
 
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentPage("timeline");
+    };
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, []);
 
 
   // --------------------------
@@ -147,9 +181,21 @@ const SharedDiaryApp = () => {
   // --------------------------
   // Group Handlers
   // --------------------------
-  const handleCreateGroup = (newGroupId?: string) => {
-    const groupIdToUse = newGroupId || `DG-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+  const handleCreateGroup = async (newGroupId?: string) => {
+
+    const groupIdToUse = newGroupId!;
     setGroupId(groupIdToUse);
+
+    const groupSnap = await getDoc(doc(db, "groups", groupIdToUse));
+
+    if (groupSnap.exists()) {
+      const key = groupSnap.data()?.groupKey;
+
+      if (key) {
+        setGroupKey(key);
+      }
+    }
+
     localStorage.setItem("lastGroupId", groupIdToUse);
     setGroupRole("admin");
     setMemberStatus("approved");
@@ -165,12 +211,19 @@ const SharedDiaryApp = () => {
 
     try {
       const groupSnap = await getDoc(doc(db, "groups", selectedGroupId));
+
       if (!groupSnap.exists()) {
         setGroupRole("member");
         setMemberStatus("pending");
         setCurrentPage("waiting");
         setAppState("inGroup");
         return;
+      }
+
+      const key = groupSnap.data()?.groupKey;
+
+      if (key) {
+        setGroupKey(key);
       }
 
       const membersData = groupSnap.data()?.members || [];
@@ -187,7 +240,8 @@ const SharedDiaryApp = () => {
       } else {
         setGroupRole("member");
         setMemberStatus("pending");
-        setCurrentPage("waiting");
+        setAppState("groupSelection");
+        return;
       }
 
       setAppState("inGroup");
@@ -255,7 +309,7 @@ const SharedDiaryApp = () => {
       userRole={currentUser?.role || "member"}
     />
   );
-  if (appState === "inGroup" && memberStatus === "pending") return (
+  /*if (appState === "inGroup" && memberStatus === "pending") return (
     <div className="min-h-screen bg-gradient-warm flex items-center justify-center p-4">
       <div className="text-center">
         <div className="text-6xl mb-4">⏳</div>
@@ -264,13 +318,13 @@ const SharedDiaryApp = () => {
         <p className="text-sm text-muted-foreground">You'll be notified once the admin approves your request.</p>
       </div>
     </div>
-  );
+  );*/
 
   const renderCurrentPage = () => {
     switch (currentPage) {
-      case "add-entry": return <AddEntryPage groupId={groupId!} onAddEntry={handleAddEntry} />;
-      case "view-diary": return <ViewDiaryPage groupId={groupId!} />; 
-      case "timeline": return <TimelinePage groupId={groupId!} />;
+      case "add-entry": return <AddEntryPage groupId={groupId!} groupKey={groupKey!} onAddEntry={handleAddEntry} />;
+      case "view-diary": return <ViewDiaryPage groupId={groupId!} groupKey={groupKey!} />; 
+      case "timeline": return <TimelinePage groupId={groupId!} groupKey={groupKey!} />;
       case "members": return <MembersPage groupId={groupId!} />;
       case "pending-requests":
         return groupRole === "admin" ? (
@@ -280,13 +334,13 @@ const SharedDiaryApp = () => {
             currentUserRole={groupRole}
           />
         ) : null;
-      default: return <TimelinePage groupId={groupId!} />;
+      default: return <TimelinePage groupId={groupId!} groupKey={groupKey!} />;
     }
   };
 
   return (
     <>
-      <Navigation currentPage={currentPage} onNavigate={handleNavigate} groupId={groupId || undefined} userRole={groupRole} />
+      <Navigation currentPage={currentPage} onNavigate={handleNavigate} onBackToGroups={handleBackToGroups} groupId={groupId || undefined} userRole={groupRole} />
       {renderCurrentPage()}
     </>
   );

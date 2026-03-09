@@ -1,9 +1,11 @@
+//src/components/AddEntryPage.tsx
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PenTool, Sparkles, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { encryptEntry } from "@/lib/crypto";
 
 // Firebase
 import { db, auth } from "@/firebase";
@@ -11,12 +13,13 @@ import { collection, addDoc, serverTimestamp, getDoc, doc } from "firebase/fires
 
 interface AddEntryPageProps {
   groupId: string; // Required to save in correct group
+  groupKey: string;
   onAddEntry?: (text: string) => void;
 }
 
 const emojiList = ["😊", "😢", "😡", "✨", "❤️", "😴"];
 
-const AddEntryPage = ({ groupId, onAddEntry }: AddEntryPageProps) => {
+const AddEntryPage = ({ groupId, groupKey, onAddEntry }: AddEntryPageProps) => {
   const [entryText, setEntryText] = useState("");
   const [selectedEmoji, setSelectedEmoji] = useState("✨");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -38,8 +41,8 @@ const AddEntryPage = ({ groupId, onAddEntry }: AddEntryPageProps) => {
     const displayName = userDoc.exists() ? userData?.name || "Anonymous" : "Anonymous";
 
     // Save to Firestore with original text + selected emoji
-    await addDoc(collection(db, "diaryEntries", groupId, "entries"), {
-      text: entryText,
+    await addDoc(collection(db, "groups", groupId, "entries"), {
+      text: await encryptEntry(entryText, groupKey),
       mood: selectedEmoji,
       user: displayName, // ✅ Use Firestore name
       uid: user.uid,

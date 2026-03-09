@@ -1,9 +1,20 @@
+//src/components/TimelinePage.tsx
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CalendarDays, Sparkles } from "lucide-react";
-import { db } from "@/firebase";
-import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
+import { auth, db } from "@/firebase";
+import {
+  collection,
+  query,
+  orderBy,
+  limit,
+  getDocs,
+  startAfter,
+  DocumentData,
+  QueryDocumentSnapshot
+} from "firebase/firestore";
+import { decryptEntry } from "@/lib/crypto";
 
 interface DiaryEntry {
   id: string;
@@ -16,37 +27,109 @@ interface DiaryEntry {
 
 interface TimelinePageProps {
   groupId: string;
+  groupKey: string;
 }
 
-const TimelinePage = ({ groupId }: TimelinePageProps) => {
+const TimelinePage = ({ groupId, groupKey }: TimelinePageProps) => {
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
 
   useEffect(() => {
-    if (!groupId) return;
+    if (!groupId || !groupKey) return;
+
+    setEntries([]);
+    setLastDoc(null);
+    setHasMore(true);
+
+    const loadEntries = async () => {
+
+      setLoading(true);
+
+      const q = query(
+        collection(db, "groups", groupId, "entries"),
+        orderBy("createdAt", "desc"),
+        limit(20)
+      );
+
+      const snapshot = await getDocs(q);
+
+      const fetchedEntries: DiaryEntry[] = await Promise.all(snapshot.docs.map(async (doc) => {
+
+        const data = doc.data();
+
+        return {
+          id: doc.id,
+          user: data.user,
+          text: await decryptEntry(data.text, groupKey),
+          mood: data.mood,
+          date:
+            data.createdAt?.toDate().toLocaleDateString("en-CA") ||
+            new Date().toLocaleDateString("en-CA"),
+          userColor: data.uid === auth.currentUser?.uid ? "blue" : "pink"
+        };
+      }));
+
+      setEntries(fetchedEntries);
+      if (snapshot.docs.length > 0) {
+        setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
+      }
+
+      if (snapshot.docs.length < 20) {
+        setHasMore(false);
+      }
+
+      setLoading(false);
+    };
+
+    loadEntries();
+
+  }, [groupId, groupKey]);
+
+  const loadMore = async () => {
+
+    if (!lastDoc || loadingMore || !hasMore) return;
+
+    setLoadingMore(true);
 
     const q = query(
-      collection(db, "diaryEntries", groupId, "entries"),
-      orderBy("createdAt", "desc")
+      collection(db, "groups", groupId, "entries"),
+      orderBy("createdAt", "desc"),
+      startAfter(lastDoc),
+      limit(20)
     );
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const fetchedEntries: DiaryEntry[] = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          user: doc.data().user,
-          text: doc.data().text,
-          mood: doc.data().mood,
-          date: doc.data().createdAt?.toDate().toLocaleDateString("en-CA") || new Date().toLocaleDateString("en-CA"),
-          userColor: Math.random() > 0.5 ? "pink" : "blue", // Optional: assign color dynamically
-        }));
-        setEntries(fetchedEntries);
-      },
-      (error) => console.error("Error fetching diary entries:", error)
-    );
+    const snapshot = await getDocs(q);
 
-    return () => unsubscribe();
-  }, [groupId]);
+    const newEntries: DiaryEntry[] = await Promise.all(snapshot.docs.map(async (doc) => {
+
+      const data = doc.data();
+
+      return {
+        id: doc.id,
+        user: data.user,
+        text: await decryptEntry(data.text, groupKey),
+        mood: data.mood,
+        date:
+          data.createdAt?.toDate().toLocaleDateString("en-CA") ||
+          new Date().toLocaleDateString("en-CA"),
+        userColor: data.uid === auth.currentUser?.uid ? "blue" : "pink"
+      };
+    }));
+
+    setEntries((prev) => [...prev, ...newEntries]);
+    if (snapshot.docs.length > 0) {
+      setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
+    }
+
+    if (snapshot.docs.length < 20) {
+      setHasMore(false);
+    }
+
+    setLoadingMore(false);
+  };
 
   // Group entries by date
   const groupedEntries = entries.reduce((groups, entry) => {
@@ -65,6 +148,14 @@ const TimelinePage = ({ groupId }: TimelinePageProps) => {
       day: "numeric",
     });
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-warm flex items-center justify-center">
+        <p className="text-muted-foreground">Loading diary...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-warm">
@@ -112,7 +203,7 @@ const TimelinePage = ({ groupId }: TimelinePageProps) => {
               </div>
             ))}
         </div>
-
+        
         {Object.keys(groupedEntries).length === 0 && (
           <div className="text-center py-12">
             <div className="text-6xl mb-4">📝</div>
@@ -124,6 +215,17 @@ const TimelinePage = ({ groupId }: TimelinePageProps) => {
             </p>
           </div>
         )}
+        {hasMore && (
+              <div className="text-center mt-6">
+                <button
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  className="px-4 py-2 bg-primary text-white rounded shadow"
+                >
+                  {loadingMore ? "Loading..." : "Load More"}
+                </button>
+              </div>
+            )}
       </div>
     </div>
   );
