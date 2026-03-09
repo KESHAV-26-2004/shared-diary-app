@@ -173,7 +173,7 @@ const Navigation = ({ currentPage, onNavigate, onBackToGroups, groupId, userRole
     <nav className="bg-gradient-card border-b border-diary-pink/30 px-6 py-4 shadow-card">
       <div className="max-w-6xl mx-auto flex items-center justify-between">
         {/* Left Section */}
-        <div className="flex items-center justify-between flex-1">
+        <div className="flex items-center gap-3 flex-1">
           {groupId && (
             <Button
               variant="ghost"
@@ -183,13 +183,11 @@ const Navigation = ({ currentPage, onNavigate, onBackToGroups, groupId, userRole
               <ArrowLeft className="h-5 w-5" />
             </Button>
           )}
-          <div className="flex items-center space-x-2">
-            <div className="hidden sm:flex items-center space-x-2">
-              <Heart className="h-6 w-6 text-primary fill-current" />
-              <h1 className="text-xl font-semibold text-foreground font-diary">
-                Shared Diary 💌
-              </h1>
-            </div>
+          <div className="flex items-center gap-2">
+            <Heart className="h-6 w-6 text-primary fill-current" />
+            <h1 className="text-xl font-semibold text-foreground font-diary whitespace-nowrap">
+              Shared Diary 💌
+            </h1>
           </div>
 
           {groupId && (
