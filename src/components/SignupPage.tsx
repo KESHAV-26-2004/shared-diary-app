@@ -13,7 +13,7 @@ import { auth, db } from "@/firebase";
 
 interface SignupPageProps {
   onSignup: (name: string, email: string, password: string) => void;
-  onBackToLogin: () => void;
+  onBackToLogin: (message?: string) => void;
 }
 
 const SignupPage = ({ onSignup, onBackToLogin }: SignupPageProps) => {
@@ -21,32 +21,53 @@ const SignupPage = ({ onSignup, onBackToLogin }: SignupPageProps) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    onSignup(name, email, password); // start signup mode
     setError("");
+    setLoading(true);
 
     try {
-      // Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const uid = userCredential.user.uid;
+      const user = userCredential.user;
 
-      // Add user profile in Firestore (no role field)
-      await setDoc(doc(db, "user", uid), {
+      // 1️⃣ create Firestore user
+      await setDoc(doc(db, "user", user.uid), {
         name,
         email,
         createdAt: new Date(),
-        groupIds: [], // initialize empty array
+        groupIds: [],
       });
 
-      await sendEmailVerification(userCredential.user);
-      await auth.signOut();
-      onBackToLogin();
+      // 2️⃣ send verification email
+      await sendEmailVerification(user, {
+        url: window.location.origin,
+      });
 
-      // Call parent handler
-      onSignup(name, email, password);
+      // 3️⃣ logout
+      await auth.signOut();
+
+      onBackToLogin("📩 Verification email sent! Please check your inbox or spam before logging in.");
+
     } catch (err: any) {
-      setError(err.message);
+
+      if (err.code === "auth/email-already-in-use") {
+        setError("This email is already registered.");
+      } 
+      else if (err.code === "auth/invalid-email") {
+        setError("Please enter a valid email address.");
+      }
+      else if (err.code === "auth/weak-password") {
+        setError("Password must be at least 6 characters.");
+      }
+      else {
+        setError("Signup failed. Please try again.");
+      }
+
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -135,17 +156,18 @@ const SignupPage = ({ onSignup, onBackToLogin }: SignupPageProps) => {
               {error && <p className="text-red-500 text-sm">{error}</p>}
 
               <Button 
-                type="submit" 
+                type="submit"
+                disabled={loading}
                 className="w-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-soft transition-smooth"
               >
-                Create Account
+                {loading ? "Creating Account..." : "Create Account"}
               </Button>
             </form>
 
             <div className="mt-4">
               <Button
                 variant="ghost"
-                onClick={onBackToLogin}
+                onClick={() => onBackToLogin()}
                 className="w-full flex items-center justify-center space-x-2 text-muted-foreground hover:text-foreground"
               >
                 <ArrowLeft className="h-4 w-4" />

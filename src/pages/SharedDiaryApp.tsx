@@ -58,6 +58,8 @@ const SharedDiaryApp = () => {
   const [groupId, setGroupId] = useState<string | null>(null);
   const [groupKey, setGroupKey] = useState<string | null>(null);
   const [groupRole, setGroupRole] = useState<"admin" | "member">("member");
+  const [loginInfoMessage, setLoginInfoMessage] = useState("");
+  const [isSigningUp, setIsSigningUp] = useState(false);
   const [memberStatus, setMemberStatus] = useState<"approved" | "pending">("pending");
 
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
@@ -79,10 +81,10 @@ const SharedDiaryApp = () => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         // 🚫 Check email verification first
-        if (!user.emailVerified) {
+        if (!user.emailVerified && !isSigningUp) {
           console.warn("Unverified user detected. Signing out...");
           await auth.signOut();
-          alert("Please verify your email before logging in. Check your inbox or trash.");
+          //alert("Please verify your email before logging in. Check your inbox or trash.");
           setCurrentUser(null);
           setAppState("login");
           setLoadingAuth(false);
@@ -91,8 +93,19 @@ const SharedDiaryApp = () => {
 
         // ✅ Verified user — continue loading their Firestore profile
         const userDoc = await getDoc(doc(db, "user", user.uid));
+        if (!userDoc.exists()) {
+          console.warn("User doc missing.");
+          await auth.signOut();
+          alert("Account setup incomplete. Please contact admin.");
+          setCurrentUser(null);
+          setAppState("login");
+          setLoadingAuth(false);
+          return;
+        }
         if (userDoc.exists()) {
           const userData = userDoc.data();
+          // prevent UI jump during signup
+          if (isSigningUp) return;
           setCurrentUser({
             id: user.uid,
             name: userData.name,
@@ -110,7 +123,7 @@ const SharedDiaryApp = () => {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [isSigningUp]);
 
   useEffect(() => {
 
@@ -144,6 +157,14 @@ const SharedDiaryApp = () => {
   const handleLogin = async (email: string, password: string) => {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    } catch (err: any) {
+      console.error("Login failed:", err.message);
+      alert(err.message);
+    }
+  };
+  /*const handleLogin = async (email: string, password: string) => {
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const userId = userCredential.user.uid;
 
       // Fetch Firestore data
@@ -164,9 +185,9 @@ const SharedDiaryApp = () => {
       console.error("Login failed:", err.message);
       alert(err.message); // or use toast
     }
-  };
+  };*/
 
-  const handleSignup = (name: string, email: string, password: string) => {
+  /*const handleSignup = (name: string, email: string, password: string) => {
     const newUser: User = {
       id: Date.now().toString(),
       name,
@@ -176,6 +197,9 @@ const SharedDiaryApp = () => {
     };
     setCurrentUser(newUser);
     setAppState("groupSelection");
+  };*/
+  const handleSignup = () => {
+    setIsSigningUp(true);
   };
 
   // --------------------------
@@ -300,8 +324,22 @@ const SharedDiaryApp = () => {
   // --------------------------
   // Render Pages
   // --------------------------
-  if (appState === "login") return <LoginPage onLogin={handleLogin} onSignup={() => setAppState("signup")} />;
-  if (appState === "signup") return <SignupPage onSignup={handleSignup} onBackToLogin={() => setAppState("login")} />;
+  if (appState === "login") return <LoginPage
+    onLogin={handleLogin}
+    onSignup={() => setAppState("signup")}
+    initialMessage={loginInfoMessage}
+  />;
+  if (appState === "signup")
+    return (
+      <SignupPage
+        onSignup={handleSignup}
+        onBackToLogin={(message?: string) => {
+          setIsSigningUp(false);
+          setLoginInfoMessage(message || "");
+          setAppState("login");
+        }}
+      />
+    );
   if (appState === "groupSelection") return (
     <GroupSelectionPage
       onCreateGroup={handleCreateGroup}

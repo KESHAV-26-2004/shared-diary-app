@@ -1,5 +1,5 @@
 //src/components/LoginPage.tsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,20 +17,32 @@ import { auth } from "@/firebase";
 interface LoginPageProps {
   onLogin: (email: string, password: string) => void;
   onSignup: () => void;
+  initialMessage?: string;
 }
 
-const LoginPage = ({ onLogin, onSignup }: LoginPageProps) => {
+const LoginPage = ({ onLogin, onSignup, initialMessage }: LoginPageProps) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [info, setInfo] = useState(initialMessage ?? "");
+  const [loading, setLoading] = useState(false);
+  const [sending, setSending] = useState(false);
   const [showResend, setShowResend] = useState(false);
   const [resetMessage, setResetMessage] = useState("");
+
+  useEffect(() => {
+    if (initialMessage) {
+      setInfo(initialMessage);
+    }
+  }, [initialMessage]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setInfo("");
     setShowResend(false);
     setResetMessage("");
+    setLoading(true);
 
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
@@ -38,37 +50,59 @@ const LoginPage = ({ onLogin, onSignup }: LoginPageProps) => {
 
       if (!user.emailVerified) {
         await auth.signOut();
-        setError("📩 Please verify your email before logging in. Check your inbox or trash.");
+        setInfo("📩 Please verify your email before logging in. Check your inbox or spam.");
         setShowResend(true);
         return;
       }
 
-      onLogin(email, password);
     } catch (err: any) {
-      setError(err.message);
+      console.error("Login error:", err);
+
+      const code = err.code;
+
+      if (code === "auth/invalid-login-credentials") {
+        setError("Invalid email or password.");
+      } 
+      else if (code === "auth/too-many-requests") {
+        setError("Too many login attempts. Please try again later.");
+      } 
+      else if (code === "auth/network-request-failed") {
+        setError("Network error. Please check your internet connection.");
+      } 
+      else {
+        setError("Login failed. Please try again.");
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleResend = async () => {
+    setSending(true);
     try {
-      setError("Sending verification email...");
-      setShowResend(false);
+      setInfo("Sending verification email...");
 
       if (auth.currentUser) {
-        await sendEmailVerification(auth.currentUser);
-        setError("✅ Verification email sent again. Check your inbox or trash!");
+        await sendEmailVerification(auth.currentUser, {
+          url: window.location.origin
+        });
+        setInfo("✅ Verification email sent again. Check your inbox or spam!");
         await auth.signOut();
         return;
       }
 
       const tempUser = await signInWithEmailAndPassword(auth, email, password);
-      await sendEmailVerification(tempUser.user);
+      await sendEmailVerification(tempUser.user, {
+        url: window.location.origin
+      });
       await auth.signOut();
 
-      setError("✅ Verification email sent again. Check your inbox or trash!");
+      setInfo("✅ Verification email sent again. Check your inbox or spam!");
     } catch (err: any) {
       console.error("Resend error:", err.message);
-      setError("Could not resend. Try again later.");
+      setError("Could not resend verification email. Try again later.");
+    } finally {
+      setSending(false);
     }
   };
 
@@ -127,7 +161,7 @@ const LoginPage = ({ onLogin, onSignup }: LoginPageProps) => {
                   type="email"
                   placeholder="your@email.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => { setEmail(e.target.value); setResetMessage("");}}
                   className="bg-white/80 border-diary-pink/30 focus:border-primary transition-smooth"
                   required
                 />
@@ -144,7 +178,7 @@ const LoginPage = ({ onLogin, onSignup }: LoginPageProps) => {
                   type="password"
                   placeholder="••••••••"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => { setPassword(e.target.value); setError(""); }}
                   className="bg-white/80 border-diary-pink/30 focus:border-primary transition-smooth"
                   required
                 />
@@ -164,17 +198,24 @@ const LoginPage = ({ onLogin, onSignup }: LoginPageProps) => {
                 )}
               </div>
 
-              {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+              {error && (
+                <p className="text-red-500 text-sm text-center">{error}</p>
+              )}
+
+              {info && (
+                <p className="text-green-600 text-sm text-center">{info}</p>
+              )}
 
               {/* Resend Email */}
               {showResend && (
                 <div className="text-center">
                   <Button
                     variant="secondary"
+                    disabled={sending}
                     onClick={handleResend}
                     className="mt-2 bg-blue-200 hover:bg-blue-400 text-black font-medium shadow-soft transition-smooth"
                   >
-                    Resend Verification Email
+                    {sending ? "Sending..." : "Resend Verification Email"}
                   </Button>
                 </div>
               )}
@@ -182,9 +223,10 @@ const LoginPage = ({ onLogin, onSignup }: LoginPageProps) => {
               {/* Login Button */}
               <Button
                 type="submit"
+                disabled={loading}
                 className="w-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-soft transition-smooth"
               >
-                Sign In
+                {loading ? "Signing In..." : "Sign In"}
               </Button>
             </form>
 
